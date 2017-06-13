@@ -158,8 +158,7 @@ $email (string) (optional string) The registered email address of the user that 
 ------------------------------------------
 return: (mixed) Returns the hashed token on success, a boolen false if not
 */
-public function createToken($token, $login, $timestamp = null, $email = null
-) {
+public function createToken($token, $login, $timestamp = null, $email = null) {
 	if(!$timestamp) {
 		$timestamp = time() + 24 * 3600;
 	}
