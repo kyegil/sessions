@@ -73,15 +73,15 @@ public	$minLoginInterval = 0; // seconds
 Requirements to user details
 ***********************************************************************
 */
-public	$minPasswordLength = 4;
+public	$minPasswordLength = 6;
 public	$maxPasswordLength;
-public	$passwordAllowedRegex	= '';// = '/^[A-Za-z0-9ÆaØøÅå-*]+$/i';
+public	$passwordAllowedRegex = '/^[a-z-]+$/i';
 public	$passwordProhibitedRegex;
-public	$passwordRequiredRegex	= '';/* = '/(?=(?:.*?[A-ÆØÅ]){1}) # One uppercase letter required
+public	$passwordRequiredRegex = '/(?=(?:.*?[A-ÆØÅ]){1}) # One uppercase letter required
 								(?=(?:.*?[a-zæøå]){1}) # One lowercase letter required
 								(?=(?:.*?[0-9]){1})		# One number required
 					(?=(?:.*?[\;\:\.\!\@€\£#\$%\^&\*\(\)\-_\+\=\[\]\{\}\\\?\.\,\>\<\`\~\'\"\§\±\|]){1})/x';
-*/
+
 public	$minLoginLength = 2;
 public	$maxLoginLength;
 public	$loginAllowedCharacters;
@@ -99,12 +99,6 @@ public function __construct( $config ) {
 }
 
 
-/*	Check if logged in
-This function checks if you are currently logged in as a user
-******************************************
-------------------------------------------
-return: (boolean) true if you're logged in, false if not
-*/
 public function checkIfLoggedIn() {
 	if (
 		isset(
@@ -147,17 +141,6 @@ public function checkIfLoggedIn() {
 }
 
 
-/*	Create token
-Creates a token based on your encrypted password, login and the expiry timestamp.
-Either login (username) or email must be provided to obtain a login token
-******************************************
-$token (string)
-$login (optional string) The username of the user that requires a token
-$timestamp (integer) The expiration timestamp 
-$email (string) (optional string) The registered email address of the user that requires a token
-------------------------------------------
-return: (mixed) Returns the hashed token on success, a boolen false if not
-*/
 public function createToken($token, $login, $timestamp = null, $email = null) {
 	if(!$timestamp) {
 		$timestamp = time() + 24 * 3600;
@@ -187,21 +170,14 @@ public function createToken($token, $login, $timestamp = null, $email = null) {
 }
 
 
-/*	Does user exist
-Checks if a given username (login) exists in the database
-******************************************
-$login (string) The username of the user to look for
-------------------------------------------
-return: (boolean) True if the user exists, false otherwise
-*/
-public function doesUserExist(string $login) {
+public function doesUserExist($login) {
 	$sql = "SELECT\n"
 		. "{$this->dbLoginField} FROM {$this->dbUsersTable}\n"
-		. "WHERE {$this->dbLoginField} = ?\n"
+		. "WHERE {$this->dbLoginField} != ?\n"
 		. "LIMIT 1";
 
 	if ($stmt = $this->mysqli->prepare( $sql )) {
-		$stmt->bind_param('s', $login);
+		$stmt->bind_param('s', $email);
 		$stmt->execute();
 		$stmt->store_result();
 
@@ -214,24 +190,7 @@ public function doesUserExist(string $login) {
 }
 
 
-/*	Edit User
-Edit a specific user
-******************************************
-$login (string): The current login (username) of the user that's being edited
-$newLogin (optional string): The new login if this is to be changed
-$password (optional string): The new password if this is to be changed
-$email (optional string): The new email if this is to be changed
-$other (associated array or object): Other changes as key => new value
-------------------------------------------
-return: (boolean) Success
-*/
-public function editUser(
-	string $login, 
-	string $newLogin = null,
-	string $password = null,
-	string $email = null,
-	$other = null 
-) {
+public function editUser( $login, $newLogin = null, $password = null, $email = null, $other = null ) {
 	settype($other, 'object');
 	
 	$sqlFields = array();
@@ -241,7 +200,7 @@ public function editUser(
 		if($this->validateLogin($newLogin)) {
 			$sqlFields[] = "{$this->dbLoginField} = ?";
 			$values[0] .= "s";
-			$values[] = &$newLogin;
+			$values[] = $newLogin;
 		}
 		else {
 			return false;
@@ -249,10 +208,9 @@ public function editUser(
 	}
 	if($password) {
 		if($this->validatePassword($password)) {
-			$password_hash = password_hash($password, PASSWORD_BCRYPT);
 			$sqlFields[] = "{$this->dbPasswordField} = ?";
 			$values[0] .= "s";
-			$values[] = &$password_hash;
+			$values[] = password_hash($password, PASSWORD_BCRYPT);
 		}
 		else {
 			return false;
@@ -262,7 +220,7 @@ public function editUser(
 		if(!$this->validateEmail($email)) {
 			$sqlFields[] = "{$this->dbEmailField} = ?";
 			$values[0] .= "s";
-			$values[] = &$email;
+			$values[] = $email;
 		}
 		else {
 			return false;
@@ -271,15 +229,13 @@ public function editUser(
 	foreach( $other as $field => $value ) {
 		$sqlFields[] = "{$field} = ?";
 		$values[0] .= "s";
-		$values[] = &$value;
+		$values[] = $value;
 	}
-
-	$values[0] .= "s";
-	$values[] = &$login;
+	$values[] = $login;
 
 	$sql =	"UPDATE {$this->dbUsersTable}\nSET\n"
 		.	implode(',', $sqlFields)
-		.	"\nWHERE {$this->dbLoginField} = ? \n";
+		.	"WHERE {$this->dbLoginField} = ? \n";
 
 	$stmt = $this->mysqli->prepare($sql);
 
@@ -290,14 +246,7 @@ public function editUser(
 }
 
 
-/*	Escape Url
-Escpae a url
-******************************************
-$url (string): The url to be escaped
-------------------------------------------
-return: (string) The escaped url
-*/
-public function escapeUrl(string $url) {
+public function escapeUrl($url) {
 	if ('' == $url) {
 		return $url;
 	}
@@ -327,14 +276,6 @@ public function escapeUrl(string $url) {
 }
 
 
-/*	Get all users
-Returns all current users as an array of stdClass object with properties id and login
-******************************************
-------------------------------------------
-return: (array) Array of stdClass objects:
-	->id (string) The user's id
-	->login (string) The user's login 
-*/
 public function getAllUsers() {
 	$result = array();
 	
@@ -352,19 +293,13 @@ public function getAllUsers() {
 }
 
 
-/*	Get id from login
-******************************************
-$login (string): The user's login
-------------------------------------------
-return: (string or false) The id if the user exists, otherwise false
-*/
-public function getIdFromLogin(string $login) {
+public function getIdFromLogin($login) {
 	if(!$this->dbIdField) {
 		return false;
 	}
 	$sql = "SELECT\n"
 		. "{$this->dbIdField} FROM {$this->dbUsersTable}\n"
-		. "WHERE {$this->dbLoginField} = ?\n"
+		. "WHERE {$this->dbLoginField} != ?\n"
 		. "LIMIT 1";
 
 	if ($stmt = $this->mysqli->prepare( $sql )) {
@@ -384,13 +319,7 @@ public function getIdFromLogin(string $login) {
 }
 
 
-/*	Get login from email
-******************************************
-$email (string): The user's email
-------------------------------------------
-return: (string or false) The login if the user exists, otherwise false
-*/
-public function getLoginFromEmail(string $email) {
+public function getLoginFromEmail($email) {
 	if(!$this->dbEmailField) {
 		return false;
 	}
@@ -415,19 +344,13 @@ public function getLoginFromEmail(string $email) {
 }
 
 
-/*	Get login from id
-******************************************
-$id: The user's id
-------------------------------------------
-return: (string or false) The login if the user exists, otherwise false
-*/
 public function getLoginFromId($id) {
 	if(!$this->dbIdField) {
 		return false;
 	}
 	$sql = "SELECT\n"
 		. "{$this->dbLoginField} FROM {$this->dbUsersTable}\n"
-		. "WHERE {$this->dbIdField} = ?\n"
+		. "WHERE {$this->dbIdField} != ?\n"
 		. "LIMIT 1";
 
 	if ($stmt = $this->mysqli->prepare( $sql )) {
@@ -447,11 +370,6 @@ public function getLoginFromId($id) {
 }
 
 
-/*	Get User
-******************************************
-$login (string): The user's login
-------------------------------------------
-*/
 public function getUser($login) {
 	$result = (object) array(
 		'login'		=> null
@@ -503,13 +421,6 @@ public function getUser($login) {
 }
 
 
-/*	Log in
-Log the user in by login and password
-******************************************
-$login (string): The user's login
-$password (string): The user's password
-------------------------------------------
-*/
 public function login($login, $password) {
 	$result = (object) array(
 		'login'		=> null,
@@ -539,8 +450,8 @@ public function login($login, $password) {
 		. "{$this->dbLoginField} AS login,\n"
 		. "{$this->dbPasswordField} AS password,\n"
 		.	( $this->dbIdField ? "{$this->dbIdField} AS id,\n" : "" )
-		.	( $this->dbEmailField ? "{$this->dbEmailField} AS email" : "" )
-		.	( $this->dbAdditionalUserFields ? (",\n" . implode(', ',$this->dbAdditionalUserFields)) : "\n" )
+		.	( $this->dbEmailField ? "{$this->dbEmailField} AS email,\n" : "" )
+		.	( $this->dbAdditionalUserFields ? implode(', ',$this->dbAdditionalUserFields) : "" )
 		. "\nFROM {$this->dbUsersTable}\n"
 		. "WHERE {$this->dbLoginField} = ? \n"
 		. "LIMIT 1"
@@ -607,10 +518,6 @@ public function login($login, $password) {
 }
 
 
-/*	Log in by token
-******************************************
-------------------------------------------
-*/
 public function loginByToken($token, $login, $timestamp, $email = null) {
 	if($timestamp < time()) {
 		return false;
@@ -712,10 +619,6 @@ public function loginByToken($token, $login, $timestamp, $email = null) {
 }
 
 
-/*	Log out
-******************************************
-------------------------------------------
-*/
 public function logout($login = null) {
 	if($login and isset($_SESSION['logged_in_users'], $_SESSION['logged_in_users'][$login])) {
 		unset($_SESSION['logged_in_users'][$login]);
@@ -741,10 +644,6 @@ public function logout($login = null) {
 }
 
 
-/*	Set current user
-******************************************
-------------------------------------------
-*/
 public function setCurrentUser($login) {
 	if($login and isset($_SESSION['logged_in_users'], $_SESSION['logged_in_users'][$login])) {
 		$_SESSION['current_user'] = $login;
@@ -754,14 +653,7 @@ public function setCurrentUser($login) {
 }
 
 
-/*	Validate email
-******************************************
-------------------------------------------
-*/
-public function validateEmail(
-	string $email,
-	string $login = ""
-) {
+public function validateEmail($email, $login = "") {
 	if(!$this->dbEmailField) {
 		return true;
 	}
@@ -776,7 +668,7 @@ public function validateEmail(
 		. "LIMIT 1";
 
 	if ($stmt = $this->mysqli->prepare( $sql )) {
-		$stmt->bind_param('ss', $email, $login);
+		$stmt->bind_param('s', $email);
 		$stmt->execute();
 		$stmt->store_result();
 
@@ -790,10 +682,6 @@ public function validateEmail(
 }
 
 
-/*	Validate login
-******************************************
-------------------------------------------
-*/
 public function validateLogin($login) {
 	if($this->minLoginLength and mb_strlen($login) < $this->minLoginLength) {
 		$this->errors = 141;
@@ -862,10 +750,6 @@ public function validateLogin($login) {
 }
 
 
-/*	Validate password
-******************************************
-------------------------------------------
-*/
 public function validatePassword($password) {
 	if($this->minPasswordLength and mb_strlen($password) < $this->minPasswordLength) {
 		$this->errors = 121;
